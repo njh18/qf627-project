@@ -108,95 +108,13 @@ def generate_signal(
 
     return df
 
-def compute_portfolio_fixed_shares(
-    df: pd.DataFrame,
-    num_of_shares: int,
-    price_column: str,
-    position_column: str,
-    initial_capital: float,
-    cost_per_trade: float
-) -> pd.DataFrame:
-    df = df.copy()
-
-    df["total_shares"] =\
-    (
-        df[position_column] * num_of_shares
-    )
-
-    df["diff_in_shares_owned"]=\
-    (
-        df["total_shares"]
-        .diff()
-        .fillna(0)
-    )
-
-    df['num_of_trades'] =\
-    (
-        np.abs(
-            df[position_column]
-            .diff()
-        )
-    )
-
-    df['transaction_cost'] =\
-    (
-        df['num_of_trades']
-        *
-        cost_per_trade
-    )
-
-
-    df['cumulative_transaction_cost'] =\
-    (
-        df['transaction_cost']
-        .cumsum()
-    )
-
-    df['our_cash'] =\
-    (
-        initial_capital 
-        - (
-            df['diff_in_shares_owned']
-            *
-            df[price_column]
-        ).cumsum() 
-        - df['cumulative_transaction_cost']
-    )
-
-    df["our_holdings"] =\
-    (
-        df["total_shares"] * df[price_column]
-    )
-
-    df["total"] =\
-    (
-        df["our_holdings"] + df["our_cash"]
-    )
-
-    df["strategy_returns"] =\
-    (
-        np.log(df["total"] 
-               / df["total"].shift(1)
-        )
-    )
-
-    df["cumulative_strategy_returns"] =\
-    (
-        np.exp(
-            df["strategy_returns"]
-            .cumsum()
-        )
-    )
-
-    return df
-
 
 def compute_portfolio(
     df: pd.DataFrame,
     price_column: str,
     position_column: str,
     initial_capital: float = 100_000.0,
-    cost_per_trade: float = 0.0
+    cost_per_trade: float = 0.0,
 ) -> pd.DataFrame:
 
     df = df.copy()
@@ -211,52 +129,65 @@ def compute_portfolio(
         prev_cash = df["our_cash"].iloc[i-1]
         prev_shares = df["shares"].iloc[i-1]
         price = df[price_column].iloc[i]
-        pos_change = df["trade_flag"].iloc[i]
+
+        prev_pos = df[position_column].iloc[i-1]
+        new_pos = df[position_column].iloc[i]
 
         cash = prev_cash
         shares = prev_shares
-        cost = 0
 
-        # ---- BUY signal (0 → 1) ----
-        if pos_change == 1:
-            # Buy maximum shares possible
-            shares_to_buy = int(prev_cash // price)
-            cost = shares_to_buy * price + cost_per_trade
-            cash = prev_cash - cost
-            shares = prev_shares + shares_to_buy
+        # --- CASE 0: No position change ---
+        if new_pos == prev_pos:
+            df.loc[df.index[i], "our_cash"] = cash
+            df.loc[df.index[i], "shares"] = shares
+            continue
 
-        # ---- SELL signal (1 → 0) ----
-        elif pos_change == -1:
-            # Sell everything
-            cash = prev_cash + prev_shares * price - cost_per_trade
+        # --- CASE 1: Move to FLAT (0) ---
+        if new_pos == 0:
+            # If previously long → sell all shares
+            if prev_pos == 1:
+                cash += prev_shares * price - cost_per_trade
+
+            # If previously short → buy back shares
+            elif prev_pos == -1:
+                cash -= abs(prev_shares) * price + cost_per_trade
+
             shares = 0
-            cost = cost_per_trade
 
-        # ---- No change (stay long or stay flat) ----
-        else:
-            cash = prev_cash
-            shares = prev_shares
+        # --- CASE 2: Move to LONG (1) ---
+        elif new_pos == 1:
+            # Cover short first
+            if prev_pos == -1:
+                cash -= abs(prev_shares) * price + cost_per_trade
+                prev_shares = 0
+
+            # Now buy with all available cash
+            shares_to_buy = int(cash // price)
+            cash -= shares_to_buy * price + cost_per_trade
+            shares = shares_to_buy
+
+        # --- CASE 3: Move to SHORT (-1) ---
+        elif new_pos == -1:
+            # Sell long first
+            if prev_pos == 1:
+                cash += prev_shares * price - cost_per_trade
+                prev_shares = 0
+
+            # Now short: borrow shares & sell them
+            shares_to_short = int(cash // price)
+            cash += shares_to_short * price - cost_per_trade
+            shares = -shares_to_short
 
         df.loc[df.index[i], "our_cash"] = cash
         df.loc[df.index[i], "shares"] = shares
-        df.loc[df.index[i], "transaction_cost"] = cost_per_trade if pos_change != 0 else 0
+        df.loc[df.index[i], "transaction_cost"] = cost_per_trade
 
-    # ---- Compute portfolio value ----
+    # --- Compute final portfolio value ---
     df["our_holdings"] = df["shares"] * df[price_column]
     df["total"] = df["our_cash"] + df["our_holdings"]
 
-    # ---- Compute returns ----
-    df["strategy_returns"] =\
-    (
-        np.log(df["total"] / df["total"].shift(1))
-    )
-
-    df["cumulative_strategy_returns"] =\
-    (
-        np.exp(
-            df["strategy_returns"]
-            .cumsum()
-        )
-    )
+    # Log returns
+    df["strategy_returns"] = np.log(df["total"] / df["total"].shift(1)).fillna(0)
+    df["cumulative_strategy_returns"] = np.exp(df["strategy_returns"].cumsum())
 
     return df
