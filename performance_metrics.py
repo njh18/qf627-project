@@ -104,12 +104,22 @@ def compute_final_portfolio_value(log_returns, initial_capital=100_000):
 # -------------------------------------------------------------------
 # Master Performance Table
 # -------------------------------------------------------------------
-def compute_performance_metrics(log_returns, initial_capital):
+def compute_performance_metrics(log_returns, 
+                                initial_capital,
+                                strategy = 'ML'):
     log_returns = log_returns.dropna()
 
 
     mdd = compute_drawdown(log_returns).max()
     cagr = compute_cagr_from_log(log_returns)
+
+    cumulative_return =\
+    (
+        np.exp(
+            log_returns
+            .cumsum()
+        )
+    ).iloc[-1]
 
     metrics = {
         "CAGR": cagr,
@@ -118,7 +128,14 @@ def compute_performance_metrics(log_returns, initial_capital):
         "Sharpe Ratio": compute_sharpe_ratio(log_returns),
         "Sortino Ratio": compute_sortino_ratio(log_returns),
         "Calmar Ratio": cagr / abs(mdd) if mdd != 0 else np.nan,
-        "Final Portfolio Value": compute_final_portfolio_value(log_returns, initial_capital=initial_capital)
+        "Final Portfolio Value": compute_final_portfolio_value(log_returns, initial_capital=initial_capital),
+        "Cumulative Return": cumulative_return
     }
 
-    return pd.DataFrame(metrics, index=["ML Strategy"])
+    df = pd.DataFrame(metrics, index=[strategy])
+
+    # to clean up all the numeric columns to max 3 decimal places
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    df[numeric_cols] = df[numeric_cols].map(lambda x: round(x, 3))
+    
+    return df
