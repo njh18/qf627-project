@@ -180,6 +180,40 @@ def add_roc(df, roc_periods: list = [], price_column='Close'):
     X.columns = [f"ROC{i}" for i in roc_periods]
     return X
 
+# ------------------------------------------------------------
+# Average True Range
+# ------------------------------------------------------------
+
+def compute_ATR(df: pd.DataFrame, window: int = 14):
+    high = df["High"]
+    low = df["Low"]
+    close = df["Close"]
+
+    # True Range
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    # ATR
+    atr = true_range.rolling(window).mean()
+    atr.name = f"ATR{window}"
+
+    return atr
+
+
+def add_atr(df: pd.DataFrame, atr_periods: list = []):
+    X = pd.concat(
+        [
+            compute_ATR(df, window=p)
+            for p in atr_periods
+        ],
+        axis=1
+    )
+    X.columns = [f"ATR{p}" for p in atr_periods]
+    return X
+
 
 # -----------------------------------------------------------
 # Build Final Feature Matrix X
@@ -195,7 +229,8 @@ def create_all_features(
     rsi_periods: list = [],
     stok_periods: list = [],
     stod_periods: list = [],
-    roc_periods: list = []
+    roc_periods: list = [],
+    atr_periods: list = []
 ):
 
     features = []
@@ -228,6 +263,10 @@ def create_all_features(
     # ROC
     features.append(
         add_roc(df, roc_periods, price_column)
+    )
+
+    features.append(
+        add_atr(df, atr_periods)
     )
 
     feature_df = pd.concat(features, axis=1)
