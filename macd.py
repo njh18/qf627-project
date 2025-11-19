@@ -319,3 +319,70 @@ def run_macd_hyperparam_search_with_regimes(
         results_df.to_csv(cache_file)
 
     return results_df
+
+
+# ------------------------------------------------------------
+# Double MACD
+# ------------------------------------------------------------
+def add_prefixed_macd(
+    df: pd.DataFrame,
+    spans: list[int],
+    price_column: str = "Close",
+    prefix: str = "fast"
+) -> pd.DataFrame:
+
+    short_span, long_span, sig_span = spans
+    df = df.copy()
+
+    df[f"{prefix}_ewma_short"] = df[price_column].ewm(span=short_span).mean()
+    df[f"{prefix}_ewma_long"]  = df[price_column].ewm(span=long_span).mean()
+
+    df[f"{prefix}_macd"] = df[f"{prefix}_ewma_short"] - df[f"{prefix}_ewma_long"]
+    df[f"{prefix}_signal"] = df[f"{prefix}_macd"].ewm(span=sig_span).mean()
+    return df
+
+
+def DUAL_MACD(
+    df: pd.DataFrame,
+    fast_spans: list[int],   # e.g. [3, 10, 16] or [5, 13, 6]
+    slow_spans: list[int],   # e.g. [12, 26, 9]
+    price_column: str = "Close",
+    allow_short: bool = False
+) -> pd.DataFrame:
+    """
+    Add fast + slow MACD, then create a combined 'signal' column:
+      +1 = long, -1 = short (if allow_short), 0 = flat.
+    """
+    df = df.copy()
+
+    # 1) Add fast & slow MACDs
+    df = add_prefixed_macd(df, fast_spans, price_column=price_column, prefix="fast")
+    df = add_prefixed_macd(df, slow_spans,  price_column=price_column, prefix="slow")
+
+    # 2) Fast MACD crossovers
+    fast_diff = df["fast_macd"] - df["fast_signal"]
+    df["fast_cross_up"] = (fast_diff > 0) & (fast_diff.shift(1) <= 0)
+    df["fast_cross_down"] = (fast_diff < 0) & (fast_diff.shift(1) >= 0)
+
+    # 3) Slow trend filter
+    slow_trend_up = df["slow_macd"] > df["slow_signal"]
+    slow_trend_down = df["slow_macd"] < df["slow_signal"]
+
+    # 4) Combined trading signal
+    # default = np.nan (no fresh signal that day)
+    long_condition  = slow_trend_up   & df["fast_cross_up"]
+    short_condition = slow_trend_down & df["fast_cross_down"]
+
+    if allow_short:
+        signal_vals = [1, -1]
+    else:
+        # map bearish condition to flat (0)
+        signal_vals = [1, 0]
+
+    df["dual_macd_signal"] = np.select(
+        [long_condition, short_condition],
+        signal_vals,
+        default=np.nan
+    )
+
+    return df
