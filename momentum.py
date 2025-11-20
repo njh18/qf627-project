@@ -8,7 +8,7 @@ def SMA(
     df: pd.DataFrame,
     windows: list[int],
     price_column: str = "Close",
-    allow_short: bool = True
+    allow_short: bool = False
 ) -> pd.DataFrame:
 
     if len(windows) != 2:
