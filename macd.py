@@ -28,7 +28,8 @@ def compute_MACD(
 # ------------------------------------------------------------
 def generate_signal(
     df: pd.DataFrame,
-    allow_short: bool = True
+    allow_short: bool = False,
+    signal_check: bool = False
 ):
     df = df.copy()
 
@@ -53,12 +54,20 @@ def generate_signal(
 
     signal_vals = [1, -1] if allow_short else [1, 0]
 
+    long_condition = (df["cross"]) & (df["macd_slope"] > 0)
+    if signal_check:
+        long_condition = long_condition & (df['ml_signal'] == 1.0)
+    
+    short_condition = (df["cross"]) & (df["macd_slope"] < 0)
+    if signal_check:
+        short_condition = short_condition & (df['ml_signal'] == 0.0)
+
     df["signal"] =\
     (
         np.select(
         [
-            (df["cross"]) & (df["macd_slope"] > 0),  # bullish
-            (df["cross"]) & (df["macd_slope"] < 0),  # bearish
+            long_condition,   # Bullish crossover
+            short_condition,   # Bearish crossover
         ],
         signal_vals,
         default=np.nan)
@@ -171,14 +180,15 @@ def MACD(
     df: pd.DataFrame,
     span: list,
     price_col: str,
-    allow_short: bool
+    allow_short: bool,
+    signal_check: bool = False
 ):
     df = df.copy()
 
     df = compute_MACD(df, span, price_column=price_col)
 
     # 2. Signals
-    df = generate_signal(df, allow_short=allow_short)
+    df = generate_signal(df, allow_short=allow_short, signal_check=signal_check)
     df = generate_position(df)
 
     return df
@@ -194,12 +204,13 @@ def evaluate_macd_params(
     price_col: str,
     starting_capital: float,
     allow_short: bool,
-    target_regime: int | None = None
+    target_regime: int | None = None,
+    signal_check: bool = False
 ):
     spans = (short_ma, long_ma, signal)
     df = df_train.copy()
 
-    df = MACD(df, list(spans), price_col=price_col, allow_short=allow_short)
+    df = MACD(df, list(spans), price_col=price_col, allow_short=allow_short, signal_check=signal_check)
 
     # 3. Regime gating: only trade in target regime
     if target_regime is not None:
@@ -243,6 +254,7 @@ def run_macd_hyperparam_search(
     starting_capital: float,
     allow_short: bool,
     cache_file: str,
+    signal_check: bool = False
 ):
 
     # ---- If cached, load and return immediately ----
@@ -260,6 +272,7 @@ def run_macd_hyperparam_search(
             price_col=price_col,
             starting_capital=starting_capital,
             allow_short=allow_short,
+            signal_check = signal_check
         )
         for (short_ma, long_ma, signal) in macd_task_list
     )
@@ -287,6 +300,7 @@ def run_macd_hyperparam_search_with_regimes(
     starting_capital: float,
     allow_short: bool,
     cache_file: str,
+    signal_check: bool = False
 ):
 
 
@@ -302,7 +316,8 @@ def run_macd_hyperparam_search_with_regimes(
                     price_col=price_col,
                     starting_capital=starting_capital,
                     allow_short=allow_short,
-                    target_regime=int(r)
+                    target_regime=int(r),
+                    signal_check = signal_check
                 )
                 for short_ma, long_ma, signal in macd_task_list
             )

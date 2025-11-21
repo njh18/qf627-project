@@ -1,0 +1,21 @@
+,Algorithms,Data,Performance
+0,LR,Training Set,0.00016354354471951005
+1,LASSO,Training Set,0.00017057168631968525
+2,Elastic Net Penalty,Training Set,0.00017057168631968525
+3,Decision Tree,Training Set,0.0
+4,Random Forest,Training Set,2.426613645426557e-05
+5,Extra Trees,Training Set,6.445348814660927e-24
+6,Gradient Boosting,Training Set,9.999085620879704e-05
+7,Adaptive Boosting,Training Set,0.0001471408008180364
+8,Support Vector Machine,Training Set,0.0001896005092386257
+9,K-Nearest Neighbors,Training Set,0.00013352408414181986
+10,LR,Testing Set,0.00013331137185762938
+11,LASSO,Testing Set,0.00011824876428080743
+12,Elastic Net Penalty,Testing Set,0.00011824876428080743
+13,Decision Tree,Testing Set,0.0005353981444265533
+14,Random Forest,Testing Set,0.00017215542791130614
+15,Extra Trees,Testing Set,0.00016507932076120812
+16,Gradient Boosting,Testing Set,0.0001840840702978707
+17,Adaptive Boosting,Testing Set,0.0001858570301584457
+18,Support Vector Machine,Testing Set,0.0001395372450391549
+19,K-Nearest Neighbors,Testing Set,0.00018311842060034195
