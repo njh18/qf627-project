@@ -179,6 +179,11 @@ class SupervisedLearning:
 
     def run_all_models(self, X_train, Y_train, X_test, Y_test, 
                        num_folds=10, seed=42, metric="neg_mean_squared_error"):
+        
+        # SCALE HERE
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        X_test_scaled  = self.scaler.transform(X_test)
+
         names, kfold_results, train_results, test_results = [], [], [], []
 
         for name, model in self.models:
@@ -187,15 +192,15 @@ class SupervisedLearning:
             kfold = KFold(n_splits=num_folds, random_state=seed, shuffle=True)
 
             # Cross-validation (negative MSE -> convert to positive)
-            cv_results = -1 * cross_val_score(model, X_train, Y_train, cv=kfold, scoring=metric)
+            cv_results = -1 * cross_val_score(model, X_train_scaled, Y_train, cv=kfold, scoring=metric)
             kfold_results.append(cv_results)
 
             # Fit model
-            res = model.fit(X_train, Y_train)
+            res = model.fit(X_train_scaled, Y_train)
 
             # Compute train/test MSE
-            train_mse = mean_squared_error(Y_train, res.predict(X_train))
-            test_mse = mean_squared_error(Y_test, res.predict(X_test))
+            train_mse = mean_squared_error(Y_train, res.predict(X_train_scaled))
+            test_mse = mean_squared_error(Y_test, res.predict(X_test_scaled))
 
             train_results.append(train_mse)
             test_results.append(test_mse)

@@ -8,7 +8,8 @@ def SMA(
     df: pd.DataFrame,
     windows: list[int],
     price_column: str = "Close",
-    allow_short: bool = False
+    allow_short: bool = False,
+    signal_check: bool = False
 ) -> pd.DataFrame:
 
     if len(windows) != 2:
@@ -28,13 +29,21 @@ def SMA(
 
     signal_vals = [1, -1] if allow_short else [1, 0]
 
+    long_condition = df[f"SMA{short_w}"] > df[f"SMA{long_w}"]
+    if signal_check:
+        long_condition = long_condition & (df['ml_signal'] == 1.0)
+    
+    short_condition = df[f"SMA{short_w}"] < df[f"SMA{long_w}"]
+    if signal_check:
+        short_condition = short_condition & (df['ml_signal'] == 0.0)
+
     # --- Signal generation ---
     # Bullish = short SMA > long SMA
     # Bearish = short SMA < long SMA
     df["signal"] = np.select(
         [
-            df[f"SMA{short_w}"] > df[f"SMA{long_w}"],   # bullish
-            df[f"SMA{short_w}"] < df[f"SMA{long_w}"],   # bearish
+            long_condition,   # Bullish crossover
+            short_condition,   # Bearish crossover
         ],
         signal_vals,
         default=np.nan
@@ -50,6 +59,61 @@ def SMA(
 
     return df
 
+
+def EMA(
+    df: pd.DataFrame,
+    windows: list[int],
+    price_column: str = "Close",
+    allow_short: bool = False,
+    signal_check: bool = False
+) -> pd.DataFrame:
+
+    if len(windows) != 2:
+        raise ValueError("windows must be a list of two integers: [short_window, long_window]")
+
+    short_w, long_w = windows
+
+    if long_w <= short_w:
+        raise ValueError("Long EMA window must be greater than short EMA window.")
+
+    df = df.copy()
+
+    # --- Compute exponential moving averages ---
+    df[f"EMA{short_w}"] = df[price_column].ewm(span=short_w, adjust=False).mean()
+    df[f"EMA{long_w}"] = df[price_column].ewm(span=long_w, adjust=False).mean()
+
+    # Choose signal values depending on long/short allowance
+    signal_vals = [1, -1] if allow_short else [1, 0]
+
+
+    long_condition = df[f"EMA{short_w}"] > df[f"EMA{long_w}"]
+    if signal_check:
+        long_condition = long_condition & (df['ml_signal'] == 1.0)
+    
+    short_condition = df[f"EMA{short_w}"] < df[f"EMA{long_w}"]
+    if signal_check:
+        short_condition = short_condition & (df['ml_signal'] == 0.0)
+
+    
+    # --- Signal generation ---
+    df["signal"] = np.select(
+        [
+            long_condition,   # Bullish crossover
+            short_condition,   # Bearish crossover
+        ],
+        signal_vals,
+        default=np.nan
+    )
+
+    # --- Convert into trading positions ---
+    df["positions"] = (
+        df["signal"]
+        .ffill()
+        .shift(1)        # trade next day
+        .fillna(0)
+    )
+
+    return df
 
 def compute_portfolio(
     df: pd.DataFrame,
@@ -143,6 +207,8 @@ def evaluate_momentum_params(
     starting_capital: float,
     allow_short: bool,
     target_regime: int | None = None,
+    ma_type: str = "SMA",
+    signal_check: bool = False
 ):
     """
     Computes the momentum strategy using specific SMA windows.
@@ -151,8 +217,15 @@ def evaluate_momentum_params(
     windows = [short_w, long_w]
     df = df_train.copy()
 
-    # 1. Run SMA Momentum
-    df = SMA(df, windows, price_column=price_col, allow_short=allow_short)
+    ma_type = ma_type.upper()
+    if ma_type not in {"SMA", "EMA"}:
+        raise ValueError("ma_type must be either 'SMA' or 'EMA'")
+
+    if ma_type == 'EMA':
+        df = EMA(df, windows, price_column=price_col, allow_short=allow_short, signal_check=signal_check)
+    else:
+        # 1. Run SMA Momentum
+        df = SMA(df, windows, price_column=price_col, allow_short=allow_short, signal_check=signal_check)
 
     # 2. If regime-aware, gate trading
     if target_regime is not None:
@@ -188,7 +261,13 @@ def run_momentum_hyperparam_search(
     starting_capital: float,
     allow_short: bool,
     cache_file: str,
+    ma_type: str = "SMA",
+    signal_check: bool = False
 ):
+
+    ma_type = ma_type.upper()
+    if ma_type not in {"SMA", "EMA"}:
+        raise ValueError("ma_type must be either 'SMA' or 'EMA'")
 
     if os.path.exists(cache_file):
         print(f"Loaded cached Momentum results from: {cache_file}")
@@ -203,7 +282,9 @@ def run_momentum_hyperparam_search(
             price_col=price_col,
             starting_capital=starting_capital,
             allow_short=allow_short,
-            target_regime=None
+            target_regime=None,
+            ma_type=ma_type,
+            signal_check=signal_check,
         )
         for (short_w, long_w) in momentum_task_list
     )
