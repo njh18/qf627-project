@@ -1690,7 +1690,7 @@ def backtest_mean_reversion_sma_bb_strategy(spy_train_features, spy_test_feature
     regime_best_params = {}
 
     for regime_id in range(5):  # Assuming 5 regimes (0-4)
-        csv_path = os.path.join(f'mr_sma_bb_hyperparameter_results_regime_{regime_id}.csv')
+        csv_path = os.path.join(f'mean_reversion_hyperparameter_train/mr_sma_bb_hyperparameter_results_regime_{regime_id}.csv')
 
         if os.path.exists(csv_path):
             # Read CSV and get best parameters (first row)
@@ -3528,7 +3528,7 @@ def backtest_mean_reversion_rsi_strategy(spy_train_features, spy_test_features):
     regime_best_params = {}
 
     for regime_id in range(5):  # Assuming 5 regimes (0-4)
-        csv_path = os.path.join(f'mr_rsi_hyperparameter_results_regime_{regime_id}.csv')
+        csv_path = os.path.join(f'mean_reversion_hyperparameter_train/mr_rsi_hyperparameter_results_regime_{regime_id}.csv')
 
         if os.path.exists(csv_path):
             # Read CSV and get best parameters (first row)
@@ -5390,7 +5390,7 @@ def backtest_mean_reversion_sma_pct_candle_strategy(spy_train_features, spy_test
     regime_best_params = {}
 
     for regime_id in range(5):  # Assuming 5 regimes (0-4)
-        csv_path = os.path.join(f'mr_sma_pct_distance_candle_hyperparameter_results_regime_{regime_id}.csv')
+        csv_path = os.path.join(f'mean_reversion_hyperparameter_train/mr_sma_pct_distance_candle_hyperparameter_results_regime_{regime_id}.csv')
 
         if os.path.exists(csv_path):
             # Read CSV and get best parameters (first row)
